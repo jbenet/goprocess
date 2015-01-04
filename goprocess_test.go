@@ -1,6 +1,7 @@
 package goprocess
 
 import (
+	"syscall"
 	"testing"
 	"time"
 )
@@ -150,40 +151,218 @@ func TestTeardownCalledOnce(t *testing.T) {
 
 func TestOnClosed(t *testing.T) {
 
+	Q := make(chan string, 10)
 	p := WithParent(Background())
 	a := setupHierarchy(p)
-	Q := make(chan string, 10)
 
-	onClosed := func(s string, p Process) {
-		<-p.Closed()
-		Q <- s
-	}
-
-	go onClosed("0", a.c[0])
-	go onClosed("10", a.c[1].c[0])
-	go onClosed("", a)
-	go onClosed("00", a.c[0].c[0])
-	go onClosed("1", a.c[1])
-	go onClosed("01", a.c[0].c[1])
-	go onClosed("11", a.c[1].c[1])
-
-	test := func(ss ...string) {
-		s1 := <-Q
-		for _, s2 := range ss {
-			if s1 == s2 {
-				return
-			}
-		}
-		t.Error("context not in group", s1, ss)
-	}
+	go onClosedStr(Q, "0", a.c[0])
+	go onClosedStr(Q, "10", a.c[1].c[0])
+	go onClosedStr(Q, "", a)
+	go onClosedStr(Q, "00", a.c[0].c[0])
+	go onClosedStr(Q, "1", a.c[1])
+	go onClosedStr(Q, "01", a.c[0].c[1])
+	go onClosedStr(Q, "11", a.c[1].c[1])
 
 	go p.Close()
 
-	test("00", "01", "10", "11")
-	test("00", "01", "10", "11")
-	test("00", "01", "10", "11")
-	test("00", "01", "10", "11")
-	test("0", "1")
-	test("0", "1")
-	test("")
+	testStrs(t, Q, "00", "01", "10", "11")
+	testStrs(t, Q, "00", "01", "10", "11")
+	testStrs(t, Q, "00", "01", "10", "11")
+	testStrs(t, Q, "00", "01", "10", "11")
+	testStrs(t, Q, "0", "1")
+	testStrs(t, Q, "0", "1")
+	testStrs(t, Q, "")
+}
+
+func TestWaitFor(t *testing.T) {
+
+	Q := make(chan string, 5)
+	a := WithParent(Background())
+	b := WithParent(Background())
+	c := WithParent(Background())
+	d := WithParent(Background())
+	e := WithParent(Background())
+
+	go onClosedStr(Q, "a", a)
+	go onClosedStr(Q, "b", b)
+	go onClosedStr(Q, "c", c)
+	go onClosedStr(Q, "d", d)
+	go onClosedStr(Q, "e", e)
+
+	testNone(t, Q)
+	a.WaitFor(b)
+	a.WaitFor(c)
+	b.WaitFor(d)
+	e.WaitFor(d)
+	testNone(t, Q)
+
+	go a.Close() // should do nothing.
+	testNone(t, Q)
+
+	go e.Close()
+	testNone(t, Q)
+
+	d.Close()
+	testStrs(t, Q, "d", "e")
+	testStrs(t, Q, "d", "e")
+
+	c.Close()
+	testStrs(t, Q, "c")
+
+	b.Close()
+	testStrs(t, Q, "a", "b")
+	testStrs(t, Q, "a", "b")
+}
+
+func TestAddChildNoWait(t *testing.T) {
+
+	Q := make(chan string, 5)
+	a := WithParent(Background())
+	b := WithParent(Background())
+	c := WithParent(Background())
+	d := WithParent(Background())
+	e := WithParent(Background())
+
+	go onClosedStr(Q, "a", a)
+	go onClosedStr(Q, "b", b)
+	go onClosedStr(Q, "c", c)
+	go onClosedStr(Q, "d", d)
+	go onClosedStr(Q, "e", e)
+
+	testNone(t, Q)
+	a.AddChildNoWait(b)
+	a.AddChildNoWait(c)
+	b.AddChildNoWait(d)
+	e.AddChildNoWait(d)
+	testNone(t, Q)
+
+	b.Close()
+	testStrs(t, Q, "b", "d")
+	testStrs(t, Q, "b", "d")
+
+	a.Close()
+	testStrs(t, Q, "a", "c")
+	testStrs(t, Q, "a", "c")
+
+	e.Close()
+	testStrs(t, Q, "e")
+}
+
+func TestAddChild(t *testing.T) {
+
+	a := WithParent(Background())
+	b := WithParent(Background())
+	c := WithParent(Background())
+	d := WithParent(Background())
+	e := WithParent(Background())
+	Q := make(chan string, 5)
+
+	go onClosedStr(Q, "a", a)
+	go onClosedStr(Q, "b", b)
+	go onClosedStr(Q, "c", c)
+	go onClosedStr(Q, "d", d)
+	go onClosedStr(Q, "e", e)
+
+	testNone(t, Q)
+	a.AddChild(b)
+	a.AddChild(c)
+	b.AddChild(d)
+	e.AddChild(d)
+	testNone(t, Q)
+
+	go b.Close()
+	testNone(t, Q)
+	d.Close()
+	testStrs(t, Q, "b", "d")
+	testStrs(t, Q, "b", "d")
+
+	go a.Close()
+	testNone(t, Q)
+	c.Close()
+	testStrs(t, Q, "a", "c")
+	testStrs(t, Q, "a", "c")
+
+	e.Close()
+	testStrs(t, Q, "e")
+}
+
+func TestBackground(t *testing.T) {
+	// test it hangs indefinitely:
+	b := Background()
+
+	go b.Close()
+	go func() {
+		b.Close()
+	}()
+
+	select {
+	case <-b.Closing():
+		t.Error("b.Closing() closed :(")
+	default:
+	}
+}
+
+func TestWithSignals(t *testing.T) {
+	p := WithSignals(syscall.SIGABRT)
+	testNotClosed(t, p)
+
+	syscall.Kill(syscall.Getpid(), syscall.SIGABRT)
+	testClosed(t, p)
+}
+
+func testClosing(t *testing.T, p Process) {
+	select {
+	case <-p.Closing():
+	case <-time.After(50 * time.Millisecond):
+		t.Fatal("should be closing")
+	}
+}
+
+func testNotClosing(t *testing.T, p Process) {
+	select {
+	case <-p.Closing():
+		t.Fatal("should not be closing")
+	case <-p.Closed():
+		t.Fatal("should not be closed")
+	default:
+	}
+}
+
+func testClosed(t *testing.T, p Process) {
+	select {
+	case <-p.Closed():
+	case <-time.After(50 * time.Millisecond):
+		t.Fatal("should be closed")
+	}
+}
+
+func testNotClosed(t *testing.T, p Process) {
+	select {
+	case <-p.Closed():
+		t.Fatal("should not be closed")
+	case <-time.After(50 * time.Millisecond):
+	}
+}
+
+func testNone(t *testing.T, c <-chan string) {
+	select {
+	case <-c:
+		t.Fatal("none should be closed")
+	default:
+	}
+}
+
+func testStrs(t *testing.T, Q <-chan string, ss ...string) {
+	s1 := <-Q
+	for _, s2 := range ss {
+		if s1 == s2 {
+			return
+		}
+	}
+	t.Error("context not in group", s1, ss)
+}
+
+func onClosedStr(Q chan<- string, s string, p Process) {
+	<-p.Closed()
+	Q <- s
 }
