@@ -47,6 +47,12 @@ func (p *process) AddChildNoWait(child Process) {
 }
 
 func (p *process) AddChild(child Process) {
+	select {
+	case <-p.Closing():
+		panic("attempt to add child to closing or closed process")
+	default:
+	}
+
 	p.children.Add(1) // p waits on child to be done
 	go func(p *process, child Process) {
 		<-p.Closing()     // wait until p is closing
@@ -56,13 +62,21 @@ func (p *process) AddChild(child Process) {
 }
 
 func (p *process) Go(f ProcessFunc) Process {
+	select {
+	case <-p.Closing():
+		panic("attempt to add child to closing or closed process")
+	default:
+	}
 
+	// this is very similar to AddChild, but also runs the func
+	// in the child. we replicate it here to save one goroutine.
 	child := newProcess(nil)
-	p.AddChild(child)
 	child.children.Add(1) // child waits on func to be done
+	p.AddChild(child)
 	go func() {
 		f(child)
-		child.children.Done()
+		child.children.Done() // wait on child's children to be done.
+		child.Close()         // close to tear down.
 	}()
 	return child
 }
