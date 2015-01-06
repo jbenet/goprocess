@@ -286,6 +286,71 @@ func TestAddChild(t *testing.T) {
 	testStrs(t, Q, "e")
 }
 
+func TestGoChildrenClose(t *testing.T) {
+
+	var a, b, c, d, e Process
+
+	var ready = make(chan struct{})
+	var bWait = make(chan struct{})
+	var cWait = make(chan struct{})
+	var dWait = make(chan struct{})
+	var eWait = make(chan struct{})
+
+	a = WithParent(Background())
+	a.Go(func(p Process) {
+		b = p
+		b.Go(func(p Process) {
+			c = p
+			ready <- struct{}{}
+			<-cWait
+		})
+		ready <- struct{}{}
+		<-bWait
+	})
+	a.Go(func(p Process) {
+		d = p
+		d.Go(func(p Process) {
+			e = p
+			ready <- struct{}{}
+			<-eWait
+		})
+		ready <- struct{}{}
+		<-dWait
+	})
+
+	<-ready
+	<-ready
+	<-ready
+	<-ready
+
+	Q := make(chan string, 5)
+
+	go onClosedStr(Q, "a", a)
+	go onClosedStr(Q, "b", b)
+	go onClosedStr(Q, "c", c)
+	go onClosedStr(Q, "d", d)
+	go onClosedStr(Q, "e", e)
+
+	testNone(t, Q)
+	go a.Close()
+	testNone(t, Q)
+
+	go b.Close()
+	testNone(t, Q)
+
+	c.Close()
+	testStrs(t, Q, "b", "c")
+	testStrs(t, Q, "b", "c")
+
+	e.Close()
+	testStrs(t, Q, "e")
+
+	d.Close()
+	<-a.Closed()
+	testStrs(t, Q, "a", "d")
+	testStrs(t, Q, "a", "d")
+}
+
 func TestBackground(t *testing.T) {
 	// test it hangs indefinitely:
 	b := Background()
@@ -359,7 +424,7 @@ func testStrs(t *testing.T, Q <-chan string, ss ...string) {
 			return
 		}
 	}
-	t.Error("context not in group", s1, ss)
+	t.Error("context not in group:", s1, ss)
 }
 
 func onClosedStr(Q chan<- string, s string, p Process) {

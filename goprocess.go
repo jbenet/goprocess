@@ -94,13 +94,26 @@ type Process interface {
 	//  parent.WaitFor(q)
 	AddChild(q Process)
 
-	// Go creates a new process, adds it as a child, and spawns the ProcessFunc f
-	// in its own goroutine. It is equivalent to:
+	// Go is much like `go`, as it runs a function in a newly spawned goroutine.
+	// The neat part of Process.Go is that the Process object you call it on will:
+	//  * construct a child Process, and call AddChild(child) on it
+	//  * spawn a goroutine, and call the given function
+	//  * Close the child when the function exits.
+	// This way, you can rest assured each goroutine you spawn has its very own
+	// Process context, and that it will be closed when the function exits.
+	// It is the function's responsibility to respect the Closing of its Process,
+	// namely it should exit (return) when <-Closing() is ready. It is basically:
 	//
-	//   GoChild(p, f)
+	//   func (p Process) Go(f ProcessFunc) Process {
+	//   	child := WithParent(p)
+	//   	go func () {
+	//   		f(child)
+	//   		child.Close()
+	//   	}()
+	//   }
 	//
 	// It is useful to construct simple asynchronous workers, children of p.
-	Go(f ProcessFunc) Process
+	Go(f ProcessFunc)
 
 	// Close ends the process. Close blocks until the process has completely
 	// shut down, and any teardown has run _exactly once_. The returned error
@@ -138,31 +151,38 @@ var nilProcessFunc = func(Process) {}
 // part of Go is that it provides Process object to communicate between the
 // function and the outside world. Thus, callers can easily WaitFor, or Close the
 // function. It is the function's responsibility to respect the Closing of its Process,
-// namely it should exit (return) when <-Closing() is ready. Go is simply:
+// namely it should exit (return) when <-Closing() is ready. It is simply:
 //
 //   func Go(f ProcessFunc) Process {
 //     p := WithParent(Background())
-//     go f(p)
+//     p.Go(f)
 //     return p
 //   }
 //
+// Note that a naive implementation of Go like the following would not work:
+//
+//   func Go(f ProcessFunc) Process {
+//     return Background().Go(f)
+//   }
+//
+// This is because having the process you
 func Go(f ProcessFunc) Process {
 	return GoChild(Background(), f)
 }
 
 // GoChild is like Go, but it registers the returned Process as a child of parent,
-// **before** spawning the goroutine, which ensures proper synchronization.
-// It is simply:
+// **before** spawning the goroutine, which ensures proper synchronization with parent.
+// It is somewhat like
 //
 //   func GoChild(parent Process, f ProcessFunc) Process {
 //     p := WithParent(parent)
-//     go f(p)
+//     p.Go(f)
 //     return p
 //   }
 //
 // And it is similar to the classic WaitGroup use case:
 //
-//   func WaitGroupGo(parent sync.WaitGroup, child func()) {
+//   func WaitGroupGo(wg sync.WaitGroup, child func()) {
 //     wg.Add(1)
 //     go func() {
 //       child()
@@ -171,7 +191,9 @@ func Go(f ProcessFunc) Process {
 //   }
 //
 func GoChild(parent Process, f ProcessFunc) Process {
-	return parent.Go(f)
+	p := WithParent(parent)
+	p.Go(f)
+	return p
 }
 
 // Spawn is an alias of `Go`. In many contexts, Spawn is a
@@ -225,5 +247,16 @@ func Background() Process {
 	return background
 }
 
-// background is a statically allocated, unclosable process.
-var background = &unclosable{newProcess(nil)}
+// background is the background process
+var background = &unclosable{Process: newProcess(nil)}
+
+// unclosable is a process that _cannot_ be closed. calling Close simply hangs.
+type unclosable struct {
+	Process
+}
+
+func (p *unclosable) Close() error {
+	var hang chan struct{}
+	<-hang // hang forever
+	return nil
+}

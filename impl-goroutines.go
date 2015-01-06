@@ -1,3 +1,8 @@
+// +build ignore
+
+// WARNING: this implementation is not correct.
+// here only for historical purposes.
+
 package goprocess
 
 import (
@@ -70,7 +75,7 @@ func (p *process) Go(f ProcessFunc) Process {
 
 	// this is very similar to AddChild, but also runs the func
 	// in the child. we replicate it here to save one goroutine.
-	child := newProcess(nil)
+	child := newProcessGoroutines(nil)
 	child.children.Add(1) // child waits on func to be done
 	p.AddChild(child)
 	go func() {
@@ -100,21 +105,10 @@ func (p *process) Closed() <-chan struct{} {
 // the _actual_ close process.
 func (p *process) doClose() {
 	// this function should only be called once (hence the sync.Once).
-	// and it will panic (on closeing channels) otherwise.
+	// and it will panic (on closing channels) otherwise.
 
 	close(p.closing)          // signal that we're shutting down (Closing)
 	p.children.Wait()         // wait till all children are done (before teardown)
 	p.closeErr = p.teardown() // actually run the close logic (ok safe to teardown)
 	close(p.closed)           // signal that we're shut down (Closed)
-}
-
-// unclosable is a process that _cannot_ be closed. calling Close simply hangs.
-type unclosable struct {
-	*process
-}
-
-func (p *unclosable) Close() error {
-	var hang chan struct{}
-	<-hang // hang forever
-	return nil
 }
