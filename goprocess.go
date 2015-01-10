@@ -121,6 +121,10 @@ type Process interface {
 	// If the process has already been closed, Close returns immediately.
 	Close() error
 
+	// CloseAfterChildren calls Close _after_ its children have Closed
+	// normally (i.e. it _does not_ attempt to close them).
+	CloseAfterChildren() error
+
 	// Closing is a signal to wait upon. The returned channel is closed
 	// _after_ Close has been called at least once, but teardown may or may
 	// not be done yet. The primary use case of Closing is for children who
