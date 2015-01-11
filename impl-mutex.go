@@ -74,13 +74,18 @@ func (p *process) AddChild(child Process) {
 	p.Unlock()
 }
 
-func (p *process) Go(f ProcessFunc) {
+func (p *process) Go(f ProcessFunc) Process {
 	child := newProcess(nil)
 	p.AddChild(child)
+
+	waitFor := newProcess(nil)
+	child.WaitFor(waitFor) // prevent child from closing
 	go func() {
 		f(child)
-		child.Close() // close to tear down.
+		waitFor.Close() // allow child to close.
+		child.Close()   // close to tear down.
 	}()
+	return child
 }
 
 // Close is the external close function.
