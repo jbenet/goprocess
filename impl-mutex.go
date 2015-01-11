@@ -167,16 +167,10 @@ func (p *process) CloseAfterChildren() error {
 	// wait for all processes we're waiting for are closed.
 	// the semantics here are simple: we will _only_ close
 	// if there are no processes currently waiting for.
-	for {
-		// remove it from waitingfors
-		if next := nextToWaitFor(); next != nil {
-			<-next.Closed()
-			continue
-		}
-
-		// YAY! we're done. close
-		break
+	for next := nextToWaitFor(); next != nil; next = nextToWaitFor() {
+		<-next.Closed()
 	}
 
+	// YAY! we're done. close
 	return p.Close()
 }
