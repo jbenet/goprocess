@@ -49,17 +49,6 @@ func (rl *RateLimiter) LimitedGo(f process.ProcessFunc) {
 
 	// this <-closed() is here because the child may have spawned
 	// children of its own, and our rate limiter should capture that.
-	// we have two options:
-	//  * this approach (which is what process.Go itself does), or
-	//  * spawn another goroutine that waits on <-child.Closed()
-	//
-	//   go func() {
-	//     <-child.Closed()
-	//     rl.limiter <- struct{}{}
-	//   }()
-	//
-	// This approach saves a goroutine. It is fine to call child.Close()
-	// multiple times.
 	go func() {
 		<-p.Closed()
 		rl.limiter <- struct{}{}
