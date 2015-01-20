@@ -81,6 +81,18 @@ func EveryGo(interval time.Duration, procfunc gp.ProcessFunc) gp.Process {
 // Tick constructs a ticker with interval, and calls the given ProcessFunc every
 // time the ticker fires.
 // This is sequentially rate limited, only one call will be in-flight at a time.
+//
+//  p := periodicproc.Tick(time.Second, func(proc goprocess.Process) {
+//  	fmt.Println("fire!")
+//  })
+//
+//  <-time.After(3 * time.Second)
+//  p.Close()
+//
+//  // Output:
+//  // fire!
+//  // fire!
+//  // fire!
 func Tick(interval time.Duration, procfunc gp.ProcessFunc) gp.Process {
 	return gp.Go(func(proc gp.Process) {
 		ticker := time.NewTicker(interval)
@@ -92,6 +104,19 @@ func Tick(interval time.Duration, procfunc gp.ProcessFunc) gp.Process {
 // TickGo constructs a ticker with interval, and calls the given ProcessFunc every
 // time the ticker fires.
 // This is not rate limited, multiple calls could be in-flight at the same time.
+//
+//  p := periodicproc.TickGo(time.Second, func(proc goprocess.Process) {
+//  	fmt.Println("fire!")
+//  	<-time.After(10 * time.Second) // will not block sequential execution
+//  })
+//
+//  <-time.After(3 * time.Second)
+//  p.Close()
+//
+//  // Output:
+//  // fire!
+//  // fire!
+//  // fire!
 func TickGo(interval time.Duration, procfunc gp.ProcessFunc) gp.Process {
 	return gp.Go(func(proc gp.Process) {
 		ticker := time.NewTicker(interval)
@@ -144,6 +169,21 @@ func goCallOnTicker(ticker <-chan time.Time, pf gp.ProcessFunc) gp.ProcessFunc {
 
 // OnSignal calls the given ProcessFunc every time the signal fires, and waits for it to exit.
 // This is sequentially rate limited, only one call will be in-flight at a time.
+//
+//  sig := make(chan struct{})
+//  p := periodicproc.OnSignal(sig, func(proc goprocess.Process) {
+//  	fmt.Println("fire!")
+//  	<-time.After(time.Second) // delays sequential execution by 1 second
+//  })
+//
+//  sig<- struct{}
+//  sig<- struct{}
+//  sig<- struct{}
+//
+//  // Output:
+//  // fire!
+//  // fire!
+//  // fire!
 func OnSignal(sig <-chan struct{}, procfunc gp.ProcessFunc) gp.Process {
 	return gp.Go(func(proc gp.Process) {
 		for {
@@ -163,6 +203,21 @@ func OnSignal(sig <-chan struct{}, procfunc gp.ProcessFunc) gp.Process {
 
 // OnSignalGo calls the given ProcessFunc every time the signal fires.
 // This is not rate limited, multiple calls could be in-flight at the same time.
+//
+//  sig := make(chan struct{})
+//  p := periodicproc.OnSignalGo(sig, func(proc goprocess.Process) {
+//  	fmt.Println("fire!")
+//  	<-time.After(time.Second) // wont block execution
+//  })
+//
+//  sig<- struct{}
+//  sig<- struct{}
+//  sig<- struct{}
+//
+//  // Output:
+//  // fire!
+//  // fire!
+//  // fire!
 func OnSignalGo(sig <-chan struct{}, procfunc gp.ProcessFunc) gp.Process {
 	return gp.Go(func(proc gp.Process) {
 		for {
