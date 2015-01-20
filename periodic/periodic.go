@@ -1,11 +1,11 @@
-// Package periodic is part of github.com/jbenet/gp.
+// Package periodic is part of github.com/jbenet/goprocess.
 // It provides a simple periodic processor that calls a function
 // periodically based on some options.
 //
 // For example:
 //
 //    // use a time.Duration
-//    p := periodicproc.Every(time.Second, func(proc gp.Process) {
+//    p := periodicproc.Every(time.Second, func(proc goprocess.Process) {
 //    	fmt.Printf("the time is %s and all is well", time.Now())
 //    })
 //
@@ -13,7 +13,7 @@
 //    p.Close()
 //
 //    // use a time.Time channel (like time.Ticker)
-//    p := periodicproc.Tick(time.Tick(time.Second), func(proc gp.Process) {
+//    p := periodicproc.Tick(time.Tick(time.Second), func(proc goprocess.Process) {
 //    	fmt.Printf("the time is %s and all is well", time.Now())
 //    })
 //
@@ -22,7 +22,7 @@
 //
 //    // or arbitrary signals
 //    signal := make(chan struct{})
-//    p := periodicproc.OnSignal(signal, func(proc gp.Process) {
+//    p := periodicproc.OnSignal(signal, func(proc goprocess.Process) {
 //    	fmt.Printf("the time is %s and all is well", time.Now())
 //    })
 //
