@@ -4,6 +4,7 @@ import (
 	"testing"
 	"time"
 
+	ci "github.com/jbenet/go-cienv"
 	gp "github.com/jbenet/goprocess"
 )
 
@@ -12,6 +13,14 @@ var (
 	interval = time.Millisecond * 10
 	timeout  = time.Second * 5
 )
+
+func init() {
+	if ci.IsRunning() {
+		grace = time.Millisecond * 500
+		interval = time.Millisecond * 1000
+		timeout = time.Second * 15
+	}
+}
 
 func between(min, diff, max time.Duration) bool {
 	return min <= diff && diff <= max
