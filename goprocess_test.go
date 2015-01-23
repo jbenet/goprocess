@@ -29,15 +29,18 @@ func setupHierarchy(p Process) tree {
 
 func TestClosingClosed(t *testing.T) {
 
+	bWait := make(chan struct{})
 	a := WithParent(Background())
-	b := WithParent(a)
+	a.Go(func(proc Process) {
+		<-bWait
+	})
 
 	Q := make(chan string, 3)
 
 	go func() {
 		<-a.Closing()
 		Q <- "closing"
-		b.Close()
+		bWait <- struct{}{}
 	}()
 
 	go func() {
@@ -165,13 +168,12 @@ func TestOnClosedAll(t *testing.T) {
 
 	go p.Close()
 
-	testStrs(t, Q, "00", "01", "10", "11", "0", "1")
-	testStrs(t, Q, "00", "01", "10", "11", "0", "1")
-	testStrs(t, Q, "00", "01", "10", "11", "0", "1")
-	testStrs(t, Q, "00", "01", "10", "11", "0", "1")
-	testStrs(t, Q, "00", "01", "10", "11", "0", "1")
-	testStrs(t, Q, "00", "01", "10", "11", "0", "1")
-	testStrs(t, Q, "")
+	testStrs(t, Q, "00", "01", "10", "11", "0", "1", "")
+	testStrs(t, Q, "00", "01", "10", "11", "0", "1", "")
+	testStrs(t, Q, "00", "01", "10", "11", "0", "1", "")
+	testStrs(t, Q, "00", "01", "10", "11", "0", "1", "")
+	testStrs(t, Q, "00", "01", "10", "11", "0", "1", "")
+	testStrs(t, Q, "00", "01", "10", "11", "0", "1", "")
 }
 
 func TestOnClosedLeaves(t *testing.T) {
@@ -398,6 +400,7 @@ func TestCloseAfterChildren(t *testing.T) {
 			<-p.Closing() // wait till we're told to close (parents mustnt)
 		})
 		ready <- struct{}{}
+		// <-p.Closing() // will CloseAfterChildren
 	})
 	a.Go(func(p Process) {
 		d = p
@@ -407,6 +410,7 @@ func TestCloseAfterChildren(t *testing.T) {
 			<-p.Closing() // wait till we're told to close (parents mustnt)
 		})
 		ready <- struct{}{}
+		<-p.Closing()
 	})
 
 	<-ready
