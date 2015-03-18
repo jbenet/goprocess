@@ -92,10 +92,12 @@ func (p *process) AddChild(child Process) {
 
 func (p *process) Go(f ProcessFunc) Process {
 	child := newProcess(nil)
-	p.AddChild(child)
-
 	waitFor := newProcess(nil)
 	child.WaitFor(waitFor) // prevent child from closing
+
+	// add child last, to prevent a closing parent from
+	// closing all of them prematurely, before running the func.
+	p.AddChild(child)
 	go func() {
 		f(child)
 		waitFor.Close()            // allow child to close.
