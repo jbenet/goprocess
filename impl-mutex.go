@@ -61,6 +61,8 @@ func (p *process) AddChildNoWait(child Process) {
 	select {
 	case <-p.Closed():
 		panic("Process cannot add children after being closed")
+	case <-p.Closing():
+		go child.Close()
 	default:
 	}
 
@@ -78,6 +80,8 @@ func (p *process) AddChild(child Process) {
 	select {
 	case <-p.Closed():
 		panic("Process cannot add children after being closed")
+	case <-p.Closing():
+		go child.Close()
 	default:
 	}
 
