@@ -30,6 +30,20 @@ func WithContext(ctx context.Context) goprocess.Process {
 	return p
 }
 
+// WithContextAndTeardown is a helper function to set teardown at initiation
+// of WithContext
+func WithContextAndTeardown(ctx context.Context, tf goprocess.TeardownFunc) goprocess.Process {
+	if ctx == nil {
+		panic("nil Context")
+	}
+	p := goprocess.WithTeardown(tf)
+	go func() {
+		<-ctx.Done()
+		p.Close()
+	}()
+	return p
+}
+
 // WaitForContext makes p WaitFor ctx. When Closing, p waits for
 // ctx.Done(), before being Closed(). It is simply:
 //
