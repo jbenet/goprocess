@@ -10,23 +10,13 @@ import (
 //
 //   func ProcessWithContext(ctx context.Context) goprocess.Process {
 //     p := goprocess.WithParent(goprocess.Background())
-//     go func() {
-//       <-ctx.Done()
-//       p.Close()
-//     }()
+//     CloseAfterContext(p, ctx)
 //     return p
 //   }
 //
 func WithContext(ctx context.Context) goprocess.Process {
-	if ctx == nil {
-		panic("nil Context")
-	}
-
 	p := goprocess.WithParent(goprocess.Background())
-	go func() {
-		<-ctx.Done()
-		p.Close()
-	}()
+	CloseAfterContext(p, ctx)
 	return p
 }
 
@@ -51,6 +41,30 @@ func WithContextAndTeardown(ctx context.Context, tf goprocess.TeardownFunc) gopr
 //
 func WaitForContext(ctx context.Context, p goprocess.Process) {
 	p.WaitFor(WithContext(ctx))
+}
+
+// CloseAfterContext schedules the process to close after the given
+// context is done. It is the equivalent of:
+//
+//   func CloseAfterContext(p goprocess.Process, ctx context.Context) {
+//     go func() {
+//       <-ctx.Done()
+//       p.Close()
+//     }()
+//   }
+//
+func CloseAfterContext(p goprocess.Process, ctx context.Context) {
+	if p == nil {
+		panic("nil Process")
+	}
+	if ctx == nil {
+		panic("nil Context")
+	}
+
+	go func() {
+		<-ctx.Done()
+		p.Close()
+	}()
 }
 
 // WithProcessClosing returns a context.Context derived from ctx that
