@@ -27,10 +27,7 @@ func WithContextAndTeardown(ctx context.Context, tf goprocess.TeardownFunc) gopr
 		panic("nil Context")
 	}
 	p := goprocess.WithTeardown(tf)
-	go func() {
-		<-ctx.Done()
-		p.Close()
-	}()
+	CloseAfterContext(p, ctx)
 	return p
 }
 
@@ -59,6 +56,12 @@ func CloseAfterContext(p goprocess.Process, ctx context.Context) {
 	}
 	if ctx == nil {
 		panic("nil Context")
+	}
+
+	// context.Background(). if ctx.Done() is nil, it will never be done.
+	// we check for this to avoid wasting a goroutine forever.
+	if ctx.Done() == nil {
+		return
 	}
 
 	go func() {
