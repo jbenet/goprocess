@@ -23,9 +23,6 @@ func WithContext(ctx context.Context) goprocess.Process {
 // WithContextAndTeardown is a helper function to set teardown at initiation
 // of WithContext
 func WithContextAndTeardown(ctx context.Context, tf goprocess.TeardownFunc) goprocess.Process {
-	if ctx == nil {
-		panic("nil Context")
-	}
 	p := goprocess.WithTeardown(tf)
 	CloseAfterContext(p, ctx)
 	return p
