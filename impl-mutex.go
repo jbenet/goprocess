@@ -127,9 +127,9 @@ func (p *process) SetTeardown(tf TeardownFunc) {
 		panic("cannot SetTeardown twice")
 	}
 
+	p.teardown = tf
 	select {
 	case <-p.Closed():
-		p.teardown = tf
 		p.closeErr = tf()
 	default:
 	}
