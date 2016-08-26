@@ -1,11 +1,11 @@
 package goprocessctx
 
 import (
+	"context"
 	"errors"
 	"time"
 
 	goprocess "github.com/jbenet/goprocess"
-	"golang.org/x/net/context"
 )
 
 const (
