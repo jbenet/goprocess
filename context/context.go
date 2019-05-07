@@ -82,10 +82,10 @@ func CloseAfterContext(p goprocess.Process, ctx context.Context) {
 //
 func WithProcessClosing(ctx context.Context, p goprocess.Process) context.Context {
 	ctx, cancel := context.WithCancel(ctx)
-	go func() {
-		<-p.Closing()
+	goprocess.WithTeardown(func() error {
 		cancel()
-	}()
+		return nil
+	})
 	return ctx
 }
 
@@ -103,9 +103,10 @@ func WithProcessClosing(ctx context.Context, p goprocess.Process) context.Contex
 //
 func WithProcessClosed(ctx context.Context, p goprocess.Process) context.Context {
 	ctx, cancel := context.WithCancel(ctx)
-	go func() {
+	p.AddChildNoWait(goprocess.WithTeardown(func() error {
 		<-p.Closed()
 		cancel()
-	}()
+		return nil
+	}))
 	return ctx
 }
