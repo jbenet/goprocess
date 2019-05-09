@@ -447,6 +447,9 @@ func TestCloseAfterChildren(t *testing.T) {
 	testStrs(t, Q, "b", "c")
 	testStrs(t, Q, "b", "c")
 
+	// should be fine.
+	b.CloseAfterChildren()
+
 	e.Close()
 	testStrs(t, Q, "e")
 
@@ -543,6 +546,31 @@ func TestCloseWait(t *testing.T) {
 	testClosed(t, a)
 	<-unblockNoWait
 	testClosed(t, noWaitProc)
+}
+
+func TestErr(t *testing.T) {
+	err := Go(func(p Process) {}).Err()
+	if err != nil {
+		t.Error(err)
+	}
+	testErr := fmt.Errorf("foobar")
+	p := WithTeardown(func() error {
+		return testErr
+	})
+	done := make(chan struct{})
+	defer func() { <-done }()
+	go func() {
+		defer close(done)
+		if err := p.Err(); err != testErr {
+			t.Errorf("expected err %q, got %q", testErr, err)
+		}
+	}()
+	select {
+	case <-time.After(time.Millisecond * 50):
+	case <-done:
+		t.Error("err shouldn't return till process is closed")
+	}
+	p.Close()
 }
 
 func TestGoClosing(t *testing.T) {
