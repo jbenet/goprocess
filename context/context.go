@@ -63,8 +63,11 @@ func CloseAfterContext(p goprocess.Process, ctx context.Context) {
 	}
 
 	go func() {
-		<-ctx.Done()
-		p.Close()
+		select {
+		case <-ctx.Done():
+			p.Close()
+		case <-p.Closed():
+		}
 	}()
 }
 
