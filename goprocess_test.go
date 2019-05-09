@@ -628,6 +628,33 @@ func TestBackground(t *testing.T) {
 	case <-b.Closing():
 		t.Error("b.Closing() closed :(")
 	}
+
+	done := make(chan struct{})
+	proc := b.Go(func(p Process) {
+		<-done
+	})
+	select {
+	case <-time.After(50 * time.Millisecond):
+	case <-proc.Closing():
+		t.Error("proc closed")
+	}
+	close(done)
+	testClosed(t, proc)
+
+	proc2 := WithTeardown(func() error {
+		return nil
+	})
+	proc2.WaitFor(b)
+
+	go proc.Close()
+
+	testClosing(t, proc)
+
+	select {
+	case <-time.After(50 * time.Millisecond):
+	case <-proc2.Closed():
+		t.Error("proc2 closed")
+	}
 }
 
 func TestWithSignals(t *testing.T) {
