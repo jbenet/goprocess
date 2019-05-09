@@ -447,6 +447,9 @@ func TestCloseAfterChildren(t *testing.T) {
 	testStrs(t, Q, "b", "c")
 	testStrs(t, Q, "b", "c")
 
+	// should be fine.
+	b.CloseAfterChildren()
+
 	e.Close()
 	testStrs(t, Q, "e")
 
@@ -455,6 +458,119 @@ func TestCloseAfterChildren(t *testing.T) {
 	<-a.Closed()
 	testStrs(t, Q, "a", "d")
 	testStrs(t, Q, "a", "d")
+}
+
+func TestWaitAfterClose(t *testing.T) {
+	a := WithParent(Background())
+	a.Close()
+
+	(func() {
+		defer func() {
+			if recover() == nil {
+				t.Error("process have paniced")
+			}
+		}()
+
+		a.Go(func(p Process) {
+			t.Error("process should not have run")
+		})
+		t.Error("process have paniced")
+	})()
+
+	child := WithParent(Background())
+	defer child.Close()
+	(func() {
+		defer func() {
+			if recover() == nil {
+				t.Error("process have paniced")
+			}
+		}()
+
+		a.AddChild(child)
+	})()
+	(func() {
+		defer func() {
+			if recover() == nil {
+				t.Error("process have paniced")
+			}
+		}()
+
+		a.WaitFor(child)
+		t.Error("process have paniced")
+	})()
+
+	// Child shouldn't have been closed
+	testNotClosing(t, child)
+
+	// Closing again shouldn't change anything.
+	a.Close()
+}
+
+func TestCloseWait(t *testing.T) {
+	unblockWait := make(chan struct{})
+	unblockNoWait := make(chan struct{})
+	a := WithParent(Background())
+	a.Go(func(p Process) {
+		unblockWait <- struct{}{}
+	})
+	go a.Close()
+
+	<-a.Closing()
+
+	a.WaitFor(Go(func(p Process) {
+		unblockWait <- struct{}{}
+	}))
+
+	a.AddChild(Go(func(p Process) {
+		unblockWait <- struct{}{}
+	}))
+
+	noWaitProc := Go(func(p Process) {
+		unblockNoWait <- struct{}{}
+	})
+
+	a.AddChildNoWait(noWaitProc)
+	testClosing(t, noWaitProc)
+
+	unblockTicker := time.NewTicker(50 * time.Millisecond)
+	defer unblockTicker.Stop()
+	for i := 0; i < 3; i++ {
+		select {
+		case <-a.Closed():
+			t.Fatal("expected process to block close")
+		case <-unblockTicker.C:
+		}
+		<-unblockWait
+	}
+
+	testClosed(t, a)
+	<-unblockNoWait
+	testClosed(t, noWaitProc)
+}
+
+func TestErr(t *testing.T) {
+	err := Go(func(p Process) {}).Err()
+	if err != nil {
+		t.Error(err)
+	}
+	testErr := fmt.Errorf("foobar")
+	p := WithTeardown(func() error {
+		return testErr
+	})
+	done := make(chan struct{})
+	defer func() { <-done }()
+	go func() {
+		defer close(done)
+		if err := p.Err(); err != testErr {
+			t.Errorf("expected err %q, got %q", testErr, err)
+		}
+	}()
+	select {
+	case <-time.After(time.Millisecond * 50):
+	case <-done:
+		t.Error("err shouldn't return till process is closed")
+	}
+	p.Close()
 }
 
 func TestGoClosing(t *testing.T) {
@@ -485,6 +601,13 @@ func TestGoClosing(t *testing.T) {
 			}
 
 			ready <- struct{}{}
+
+			// parent shouldn't close first.
+			select {
+			case <-a.Closed():
+				t.Error("should not be closed")
+			case <-time.After(100 * time.Millisecond):
+			}
 		})
 
 		ready <- struct{}{}

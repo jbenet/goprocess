@@ -66,11 +66,10 @@ type Process interface {
 	// WaitFor makes p wait for q before exiting. Thus, p will _always_ close
 	// _after_ q. Note well: a waiting cycle is deadlock.
 	//
-	// If q is already Closed, WaitFor calls p.Close()
-	// If p is already Closing or Closed, WaitFor panics. This is the same thing
-	// as calling Add(1) _after_ calling Done() on a wait group. Calling WaitFor
-	// on an already-closed process is a programming error likely due to bad
-	// synchronization
+	// If p is already Closed, WaitFor panics. This is the same thing as
+	// calling Add(1) _after_ calling Done() on a wait group. Calling
+	// WaitFor on an already-closed process is a programming error likely
+	// due to bad synchronization
 	WaitFor(q Process)
 
 	// AddChildNoWait registers child as a "child" of Process. As in UNIX,
@@ -92,6 +91,8 @@ type Process interface {
 	// AddChild is the equivalent of calling:
 	//  parent.AddChildNoWait(q)
 	//  parent.WaitFor(q)
+	//
+	// It will _panic_ if the parent is already closed.
 	AddChild(q Process)
 
 	// Go is much like `go`, as it runs a function in a newly spawned goroutine.
