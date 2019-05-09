@@ -252,7 +252,7 @@ func WithParent(parent Process) Process {
 // This is useful to bind Process trees to syscall.SIGTERM, SIGKILL, etc.
 func WithSignals(sig ...os.Signal) Process {
 	p := WithParent(Background())
-	c := make(chan os.Signal)
+	c := make(chan os.Signal, 1)
 	signal.Notify(c, sig...)
 	go func() {
 		<-c
