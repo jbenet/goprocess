@@ -56,9 +56,8 @@ func CloseAfterContext(p goprocess.Process, ctx context.Context) {
 		panic("nil Context")
 	}
 
-	// context.Background(). if ctx.Done() is nil, it will never be done.
-	// we check for this to avoid wasting a goroutine forever.
-	if ctx.Done() == nil {
+	// Avoid a goroutine for both context.Background() and goprocess.Background().
+	if ctx.Done() == nil || p.Closed() == nil {
 		return
 	}
 
