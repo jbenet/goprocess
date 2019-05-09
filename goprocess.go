@@ -252,7 +252,7 @@ func WithParent(parent Process) Process {
 // This is useful to bind Process trees to syscall.SIGTERM, SIGKILL, etc.
 func WithSignals(sig ...os.Signal) Process {
 	p := WithParent(Background())
-	c := make(chan os.Signal)
+	c := make(chan os.Signal, 1)
 	signal.Notify(c, sig...)
 	go func() {
 		<-c
@@ -260,25 +260,4 @@ func WithSignals(sig ...os.Signal) Process {
 		p.Close()
 	}()
 	return p
-}
-
-// Background returns the "background" Process: a statically allocated
-// process that can _never_ close. It also never enters Closing() state.
-// Calling Background().Close() will hang indefinitely.
-func Background() Process {
-	return background
-}
-
-// background is the background process
-var background = &unclosable{Process: newProcess(nil)}
-
-// unclosable is a process that _cannot_ be closed. calling Close simply hangs.
-type unclosable struct {
-	Process
-}
-
-func (p *unclosable) Close() error {
-	var hang chan struct{}
-	<-hang // hang forever
-	return nil
 }
