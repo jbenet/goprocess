@@ -457,6 +457,94 @@ func TestCloseAfterChildren(t *testing.T) {
 	testStrs(t, Q, "a", "d")
 }
 
+func TestWaitAfterClose(t *testing.T) {
+	a := WithParent(Background())
+	a.Close()
+
+	(func() {
+		defer func() {
+			if recover() == nil {
+				t.Error("process have paniced")
+			}
+		}()
+
+		a.Go(func(p Process) {
+			t.Error("process should not have run")
+		})
+		t.Error("process have paniced")
+	})()
+
+	child := WithParent(Background())
+	defer child.Close()
+	(func() {
+		defer func() {
+			if recover() == nil {
+				t.Error("process have paniced")
+			}
+		}()
+
+		a.AddChild(child)
+	})()
+	(func() {
+		defer func() {
+			if recover() == nil {
+				t.Error("process have paniced")
+			}
+		}()
+
+		a.WaitFor(child)
+		t.Error("process have paniced")
+	})()
+
+	// Child shouldn't have been closed
+	testNotClosing(t, child)
+
+	// Closing again shouldn't change anything.
+	a.Close()
+}
+
+func TestCloseWait(t *testing.T) {
+	unblockWait := make(chan struct{})
+	unblockNoWait := make(chan struct{})
+	a := WithParent(Background())
+	a.Go(func(p Process) {
+		unblockWait <- struct{}{}
+	})
+	go a.Close()
+
+	<-a.Closing()
+
+	a.WaitFor(Go(func(p Process) {
+		unblockWait <- struct{}{}
+	}))
+
+	a.AddChild(Go(func(p Process) {
+		unblockWait <- struct{}{}
+	}))
+
+	noWaitProc := Go(func(p Process) {
+		unblockNoWait <- struct{}{}
+	})
+
+	a.AddChildNoWait(noWaitProc)
+	testClosing(t, noWaitProc)
+
+	unblockTicker := time.NewTicker(50 * time.Millisecond)
+	defer unblockTicker.Stop()
+	for i := 0; i < 3; i++ {
+		select {
+		case <-a.Closed():
+			t.Fatal("expected process to block close")
+		case <-unblockTicker.C:
+		}
+		<-unblockWait
+	}
+
+	testClosed(t, a)
+	<-unblockNoWait
+	testClosed(t, noWaitProc)
+}
+
 func TestGoClosing(t *testing.T) {
 
 	var ready = make(chan struct{})
@@ -485,6 +573,13 @@ func TestGoClosing(t *testing.T) {
 			}
 
 			ready <- struct{}{}
+
+			// parent shouldn't close first.
+			select {
+			case <-a.Closed():
+				t.Error("should not be closed")
+			case <-time.After(100 * time.Millisecond):
+			}
 		})
 
 		ready <- struct{}{}
