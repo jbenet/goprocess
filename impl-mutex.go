@@ -11,7 +11,6 @@ type process struct {
 	waiters  []*processLink            // processes that wait for us. for gc.
 
 	teardown TeardownFunc  // called to run the teardown logic.
-	waiting  chan struct{} // closed when CloseAfterChildrenClosed is called.
 	closing  chan struct{} // closed once close starts.
 	closed   chan struct{} // closed once close is done.
 	closeErr error         // error to return to clients of Close()
@@ -261,10 +260,6 @@ func (p *process) CloseAfterChildren() error {
 	select {
 	case <-p.Closed():
 		p.Unlock()
-		return p.Close() // get error. safe, after p.Closed()
-	case <-p.waiting: // already called it.
-		p.Unlock()
-		<-p.Closed()
 		return p.Close() // get error. safe, after p.Closed()
 	default:
 	}
