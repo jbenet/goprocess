@@ -624,9 +624,9 @@ func TestBackground(t *testing.T) {
 	go b.Close()
 
 	select {
+	case <-time.After(50 * time.Millisecond):
 	case <-b.Closing():
 		t.Error("b.Closing() closed :(")
-	default:
 	}
 }
 
